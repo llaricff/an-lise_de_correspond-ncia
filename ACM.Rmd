@@ -1,0 +1,291 @@
+---
+title: "Análise de Correspondência Múltipla (ACM)"
+output: html_notebook
+---
+
+Material retirado da aula de MBA em Data Science & Analytics, Esalq/USP. Aluna: Larissa Chacon Finzeto.
+Fonte: Fávero e Belfiore, MANUAL DE ANÁLISE DE DADOS, Capítulo 11
+
+---
+
+Pacotes:
+
+```{r}
+pacotes <- c("plotly",            #Plataforma gráfica
+             "tidyverse",         #Carregar outros pacotes no R
+             "ggrepel",           #Geoms de texto e rótulo para 'ggplot2', que ajudam a evitar sobreposição de textos
+             "knitr",             #Formatação de tabelas
+             "sjPlot",            #Elaboração de tabelas de contingência
+             "FactoMineR",        #Função 'CA' para elaboração direta da Anacor
+             "amap",              #Funções 'matlogic' e 'burt' para matrizes binária e de Burt
+             "ade4"               #Função 'dudi.acm' para elaboração da ACM
+             )
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+```
+
+Para análise de correspondência múltipla, vamos utilizar um banco de dados com 3 variáveis, onde cada uma possui 3 ou 2 categorias: Perfil (conservador, moderado e agressivo), Tipo de aplicação (Poupança, CDB e Ações) e Estado civil (Solteiro e Casado).
+
+```{r}
+
+load(file = "perfil_investidor_aplicacao_estadocivil.RData")
+
+perfil_investidor_aplicacao_estadocivil %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE,
+                font_size = 20)
+```
+
+Tabelas de frequência das variáveis qualitativas
+
+```{r}
+
+summary(perfil_investidor_aplicacao_estadocivil)
+
+```
+
+Vamos iniciar as análises com as Tabelas de Contingências
+
+Na ACM, só participam as variáeis que apresentam associação estatisticamente signficativa com pelo menos uma outra variável. Portanto, antes de dar continuidade, é importante realizar um teste X² para cada par de variável. Se algum não apresentar associação, deverá ser excluído, pois não acrescenta nada à análise.
+
+(1) Perfil x Aplicação
+
+```{r}
+
+sjt.xtab(var.row = perfil_investidor_aplicacao_estadocivil$perfil,
+         var.col = perfil_investidor_aplicacao_estadocivil$aplicacao,
+         show.exp = TRUE,
+         show.row.prc = TRUE,
+         show.col.prc = TRUE)
+
+```
+
+(2) Perfil x Estado Civil
+
+```{r}
+
+sjt.xtab(var.row = perfil_investidor_aplicacao_estadocivil$perfil,
+         var.col = perfil_investidor_aplicacao_estadocivil$estado_civil,
+         show.exp = TRUE,
+         show.row.prc = TRUE,
+         show.col.prc = TRUE)
+
+```
+
+(3) Aplicação x Estado Civil
+
+```{r}
+
+sjt.xtab(var.row = perfil_investidor_aplicacao_estadocivil$aplicacao,
+         var.col = perfil_investidor_aplicacao_estadocivil$estado_civil,
+         show.exp = TRUE,
+         show.row.prc = TRUE,
+         show.col.prc = TRUE)
+
+```
+
+Uma particularidade da ACM é a de que, dependendo da análise, podemos gerar muitas tabelas de contingência. Então, devemos agregar todas essas tabelas em uma única grande tabela de contingência, para a partir daí, extrairmos as informações que queremos.
+
+Existem dois caminhos: Matriz Binária e Matriz de Burt
+
+(1) Matriz binária
+
+```{r}
+
+matriz_binaria <- matlogic(perfil_investidor_aplicacao_estadocivil[,2:4])
+
+matriz_binaria
+
+```
+(2) Matriz de Burt
+
+```{r}
+
+matriz_burt <- burt(perfil_investidor_aplicacao_estadocivil[,2:4])
+matriz_burt
+
+verifica_burt <- t(matriz_binaria) %*% matriz_binaria
+
+```
+
+Finalizada a etapa intermediária, podemos seguir para a extração do Mapa Conceitual.
+
+Elaboração da análise de correspondência múltipla (ACM)
+
+```{r}
+
+ACM <- dudi.acm(perfil_investidor_aplicacao_estadocivil[,2:4], scannf = FALSE)
+
+```
+
+O objeto ACM nos dá a visualização das coordenadas principais das categorias das variáveis. Os componentes 1 e 2 são as coordenadas no eixo X e no eixo Y, para cada uma das categorias das variáveis.
+
+
+Método da matriz de Burt B (componente 'co' do objeto 'ACM')
+
+```{r}
+
+round(ACM$co, 3) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = FALSE,
+                font_size = 20)
+
+```
+
+Método da matriz binária (componente 'c1' do objeto 'ACM')
+
+```{r}
+
+round(ACM$c1, 3) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = FALSE,
+                font_size = 20)
+
+```
+
+Ainda dentro do objeto ACM, temos as informação para os valores das massas:
+
+Massas das linhas e colunas (componente 'cw' do objeto 'ACM')
+
+```{r}
+
+ACM$cw
+
+```
+Inércias principais (componente 'eig' do objeto 'ACM')
+
+```{r}
+
+ACM$eig
+
+```
+Foram geradas 5 inércias, indicando que há 5 dimensões nesta análise: 3 variáveis (Q) e 8 categorias (J)
+
+J - Q = 5 dimensões
+
+Percentual de variância explicada por dimensão, ou seja, o quanto da variância há em cada dimensão
+
+```{r}
+
+perc_variancia <- (ACM$eig / sum(ACM$eig)) * 100
+perc_variancia
+
+```
+Visualização do percentual de variância explicada por dimensão
+
+```{r}
+
+data.frame(Dimensão = paste("Dimensão", 1:length(perc_variancia)),
+           Variância = perc_variancia) %>%
+  ggplot(aes(x = Dimensão,
+             y = Variância,
+             label = paste0(round(Variância, 2),"%"))) +
+  geom_bar(stat = "identity", fill = "pink") +
+  geom_text(vjust = 2.5, size = 5) +
+  theme_classic()
+
+```
+
+MAPA PERCEPTUAL
+
+Vamos para algumas etapas operacionais que servem para contar as categorias de cada variável
+
+Definição da quantidade de categorias de cada variável qualitativa
+
+```{r}
+
+quant_categorias <- apply(perfil_investidor_aplicacao_estadocivil[,2:4],
+                          MARGIN =  2,
+                          FUN = function(x) nlevels(as.factor(x)))
+
+```
+
+Consolidando as coordenadas-padrão obtidas por meio da matriz binária ('c1')
+
+```{r}
+df_ACM <- data.frame(ACM$c1, Variável = rep(names(quant_categorias),
+                                            quant_categorias))
+```
+
+Visualizando as coordenadas
+
+```{r}
+
+df_ACM %>%
+  rownames_to_column() %>%
+  rename(Categoria = 1) %>%
+  mutate(Categoria = gsub("perfil.","", Categoria),
+         Categoria = gsub("aplicacao.","", Categoria),
+         Categoria = gsub("estado_civil.","", Categoria)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = FALSE,
+                font_size = 20)
+
+```
+
+Plotando o mapa perceptual
+
+```{r}
+df_ACM %>%
+  rownames_to_column() %>%
+  rename(Categoria = 1) %>%
+  mutate(Categoria = gsub("perfil.","", Categoria),
+         Categoria = gsub("aplicacao.","", Categoria),
+         Categoria = gsub("estado_civil.","", Categoria)) %>%
+  ggplot(aes(x = CS1, y = CS2, label = Categoria, color = Variável)) +
+  geom_point() +
+  geom_label_repel() +
+  geom_vline(aes(xintercept = 0), linetype = "longdash", color = "grey48") +
+  geom_hline(aes(yintercept = 0), linetype = "longdash", color = "grey48") +
+  labs(x = paste("Dimensão 1:", paste0(round(perc_variancia[1], 2), "%")),
+       y = paste("Dimensão 2:", paste0(round(perc_variancia[2], 2), "%"))) +
+  scale_color_manual("Variável",
+                     values = c("turquoise3", "springgreen4", "deeppink1")) +
+  theme_classic()
+```
+
+Coletando as coordenadas das observações
+
+```{r}
+
+ACM_observacoes_df <- data.frame(ACM$li)
+
+```
+
+Vamos acrescentar as informações das observacões ao mapa perceptual da ACM
+
+```{r}
+ACM_observacoes_df %>% 
+  ggplot(aes(x = Axis1, y = Axis2, label = perfil_investidor_aplicacao$estudante)) +
+  geom_point(shape = 17, color = "red", size = 2) +
+  geom_hline(yintercept = 0, linetype = "longdash", color = "grey48") +
+  geom_vline(xintercept = 0, linetype = "longdash", color = "grey48") +
+  geom_text_repel(max.overlaps = 100, size = 3) +
+  geom_density2d(color = "gray") +
+  geom_label_repel(data = df_ACM, 
+                   aes(x = CS1, y = CS2, 
+                       label = rownames(df_ACM), 
+                       fill = Variável), 
+                   color = "white") +
+  labs(x = paste("Dimensão 1:", paste0(round(perc_variancia[1], 2), "%")),
+       y = paste("Dimensão 2:", paste0(round(perc_variancia[2], 2), "%"))) +
+  scale_fill_viridis_d() +
+  theme(panel.background = element_rect("white"),
+        panel.border = element_rect("NA"),
+        panel.grid = element_line("gray95"),
+        legend.position = "none")
+```
+
+FIM
