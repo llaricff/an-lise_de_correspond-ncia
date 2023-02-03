@@ -1,0 +1,449 @@
+---
+title: "Análise de Correspondência Simples"
+output: html_notebook
+---
+
+Material retirado da aula de MBA em Data Science & Analytics, Esalq/USP. Aluna: Larissa Chacon Finzeto.
+Fonte: Fávero e Belfiore, MANUAL DE ANÁLISE DE DADOS, Capítulo 11
+
+---
+
+Pacotes:
+
+```{r}
+pacotes <- c("plotly",            #Plataforma gráfica
+             "tidyverse",         #Carregar outros pacotes no R
+             "ggrepel",           #Geoms de texto e rótulo para 'ggplot2', que ajudam a evitar sobreposição de textos
+             "knitr",             #Formatação de tabelas
+             "sjPlot",            #Elaboração de tabelas de contingência
+             "FactoMineR",        #Função 'CA' para elaboração direta da Anacor
+             "amap",              #Funções 'matlogic' e 'burt' para matrizes binária e de Burt
+             "ade4"               #Função 'dudi.acm' para elaboração da ACM
+             )
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+```
+
+Para análise de correspondência simples, vamos utilizar um banco de dados com 2 variáveis, onde cada uma possui 3 categorias: Perfil (conservador, moderado e agressivo) e Tipo de aplicação (Poupança, CDB e Ações).
+
+```{r}
+
+load(file = "perfil_investidor_aplicacao.RData")
+
+perfil_investidor_aplicacao %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE,
+                font_size = 20)
+
+
+```
+
+Aqui vamos gerar uma tabela com uma síntese dos dados. Como trata-se de dados categóricos, o resultado será uma tabela de frequências:
+
+```{r}
+
+summary(perfil_investidor_aplicacao)
+
+```
+
+ANÁLISE DE CORRESPONDÊNCIA SIMPLES (ANACOR)
+
+1ª parte: Para iniciar, devemos fazer a análise da associação por meio de tabelas
+
+(1) Tabela de contingência com frequências absolutas observadas:
+
+```{r}
+
+tabela_contingência <- table(perfil_investidor_aplicacao$perfil,
+                             perfil_investidor_aplicacao$aplicacao)
+
+tabela_contingência
+
+```
+
+Definição da quantidade de observações na tabela de contingência
+
+```{r}
+n <- sum(tabela_contingência)
+n
+
+```
+
+(2) Realizar a estatística qui-quadrado e teste
+
+```{r}
+
+qui2 <- chisq.test(x = tabela_contingencia)
+qui2
+
+```
+
+(3) Tabela de contingência com frequências absolutas observadas
+
+```{r}
+
+qui2$observed
+
+```
+
+(4) Tabela de contingência com frequências absolutas esperadas
+
+```{r}
+
+qui2$expected
+
+```
+
+Tabela de contingência com frequências absolutas observadas e esperadas unidas para melhor visualização
+
+```{r}
+
+sjt.xtab(var.row = perfil_investidor_aplicacao$perfil,
+         var.col = perfil_investidor_aplicacao$aplicacao,
+         show.exp = TRUE)
+
+```
+
+(5) Tabela de Resíduos, ou seja, as diferenças entre frequências absolutas observadas e esperadas:
+
+```{r}
+
+qui2$observed - qui2$expected
+
+```
+
+(6) Valores qui-quadrado por célula. Aqui iremos investigar se há associação estatisticamente significante entre as variáveis, utilizando a soma do x², por meio das seguintes hipóteses:
+
+H0: as variáveis se associam de forma aleatória (não existe associação)
+H1: a associação entre as variáveis não se dá de forma aleatória (existe associação)
+
+```{r}
+
+((qui2$observed - qui2$expected)^2)/qui2$expected
+
+```
+
+(7) Tabela de Resíduos Padronizados
+
+```{r}
+
+qui2$residuals
+
+```
+(8) Tabel de Resíduos Padronizados Ajustados
+
+Na tabela de resíduos padronizados ajustados é onde vamos saber onde e porquê há as associações. A interpretação dá-se da seguinte maneira:
+- Se o valor do resíduo padronizado ajustado em certa célula for maior do que 1,96 , interpreta se que existe associação significativa, ao nível de significância de 5%, entre as duas categorias que interagem na célula;
+- Se for menor do que 1,96, não há associação estatisticamente significativa.
+
+```{r}
+
+qui2$stdres
+
+```
+Vamos gerar um mapa de calor dos resíduos padronizados ajustados para fácil interpretação:
+
+```{r}
+
+data.frame(qui2$stdres) %>%
+  rename(perfil = 1,
+         aplicacao = 2) %>%
+  ggplot(aes(x = fct_rev(perfil), y = aplicacao,
+             fill = Freq, label = round(Freq, 3))) +
+  geom_tile() +
+  geom_text(size = 5) +
+  scale_fill_gradient2(low = "white", 
+                       mid = "white", 
+                       high = "yellow",
+                       midpoint = 1.96) +
+  labs(x = 'Perfil', y = 'Aplicação', fill = "Res. Pad. Ajustados") +
+  coord_flip() +
+  theme_classic()
+
+```
+
+2ª Parte: Análise da associação por meio do mapa perceptual
+
+Os mapas perceptuais são gerados a partir dos autovetores, que são gerados a partir dos autovalores. Os autovalores são extraídos da matriz W, gerada por meio da matriz A multiplicada por ela mesma, mas transposta. Vamos por partes:
+
+(1) Definição da matriz A
+
+Resíduos padronizados (qui2$residuals) divididos pela raiz quadrada do tamanho da amostra (n)
+
+```{r}
+
+matrizA <- qui2$residuals/sqrt(n)
+
+matrizA
+
+```
+(2) Definição da matriz W
+
+Multiplicação da matriz A transposta pela matriz A
+
+```{r}
+
+matrizW <- t(matrizA) %*% matrizA
+
+matrizW
+
+```
+
+Definição da quantidade de dimensões
+
+A quantidade de dimensões é dada por meio da quantidade de categorias das variáveis em análise. Essa quantidade é definida por m:
+                      
+                       m = mínimo(I - 1, J - 1)
+                       
+As dimensões servm para criarmos as coordenadas dos pontos no mapa, e eles nos demonstrarão as inércias parciais de cada dimensão. Assim, entenderemos a inércia total do mapa.
+
+```{r}
+
+qtde_dimensoes <- min(nrow(matrizW) - 1, ncol(matrizW) - 1)
+
+qtde_dimensoes
+
+```
+
+Definição dos valores singulares - os valores singulares não são o lâmbida! São raíz de lâmbida².
+
+```{r}
+
+VS_AV <- svd(matrizA, nu = qtde_dimensoes, nv = qtde_dimensoes)
+
+```
+
+Valores singulares de cada dimensão
+
+```{r}
+
+valores_singulares <- VS_AV$d[1:qtde_dimensoes]
+
+valores_singulares
+
+```
+Autovalores (eigenvalues) de cada dimensão - gerados à partir dos valores singulares. O 1º autovalor é sempre o maior, e é o utilizado para gerar o eixo X. O 2º autovalor origina o eixo Y.
+
+```{r}
+
+eigenvalues <- (valores_singulares)^2
+
+eigenvalues
+
+```
+
+Cálculo da inércia principal total (a partir do qui-quadrado): soma dos 2 autovalores.
+
+```{r}
+
+inercia_total <- as.numeric(qui2$statistic/sum(tabela_contingencia))
+
+inercia_total
+
+```
+
+Cálculo da variância explicada em cada dimensão: autovalores divididos pela inércia total. Representa o quanto da variância está em cada dimensão.
+
+```{r}
+
+variancia_explicada <- eigenvalues / inercia_total
+
+variancia_explicada
+
+```
+Ou seja, 73% da variância está na 1ª dimensão e 26% está na 2ª dimensão.
+
+
+MASSAS DAS LINHAS E COLUNAS
+
+As massas nas colunas e nas linhas referem-se aos percentuais das MARGENS da nossa tabela de contingência.
+
+- As massas representam a influência que cada categoria exerce sobre as demais categorias de sua variável, seja na coluna (column profiles) ou linha (row profiles);
+
+- Com base nos "totais" da tabela de contingência, para a categoria 1 das variáveis, obtém-se as massas médias.
+
+Cálculo das massas das colunas (column profiles)
+
+```{r}
+
+soma_colunas <- apply(tabela_contingencia, MARGIN = 1, FUN = sum)
+
+soma_colunas
+
+```
+
+Massas das colunas (column profiles)
+
+```{r}
+
+massa_colunas <- soma_colunas / n
+
+massa_colunas
+
+```
+- 17% tem perfil conservador
+- 25% tem perfil moderado
+- 58% tem perfil agressivo
+
+Cálculo das massas das linhas (row profiles)
+
+```{r}
+
+soma_linhas <- apply(tabela_contingencia, MARGIN = 2, FUN = sum)
+
+soma_linhas
+
+```
+Massas das linhas (row profiles)
+
+```{r}
+
+massa_linhas <- soma_linhas / n
+
+massa_linhas
+
+```
+- 15% investem na poupança
+- 40% investem no CDB
+- 45% investem em ações
+
+DETERMINAR OS AUTOVETORES
+
+Cada autovetor irá gerar o seu autovalor para a variável que está em linha e para a variável que está em coluna.
+
+- Autovetor U: variável em linha (tanto para o autovalor 1, quanto para o autovalor 2)
+
+- Autovetor V: variável em coluna (tanto para o autovalor 1, quanto para o autovalor 2)
+
+A partir deles, vamos extrair as coordenadas X e Y
+
+```{r}
+
+autovetor_v <-VS_AV$v
+autovetor_v
+
+autovetor_u <-VS_AV$u
+autovetor_u
+
+```
+RESUMO
+
+```{r}
+
+data.frame(Dimensão = paste("Dimensão", 1:qtde_dimensoes),
+           `Valor Singular` = valores_singulares,
+           `Inércia Principal Parcial eigenvalues` = eigenvalues) %>%
+  mutate(`Percentual da Inércia Principal Total` = (`Inércia.Principal.Parcial.eigenvalues`/inercia_total) * 100,
+         `Percentual da Inércia Principal Total Acumulada` = cumsum(`Percentual da Inércia Principal Total`),
+         Qui2 = qui2$statistic[[1]] * `Percentual da Inércia Principal Total` / n,
+         `Valor Singular` = `Valor.Singular`,
+         `Inércia Principal Parcial eigenvalues` = Inércia.Principal.Parcial.eigenvalues) %>%
+  select(Dimensão, `Valor Singular`, `Inércia Principal Parcial eigenvalues`,
+         Qui2, `Percentual da Inércia Principal Total`,
+         `Percentual da Inércia Principal Total Acumulada`) %>%
+  knitr::kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE, 
+                font_size = 17)
+
+```
+
+Agora vamos calcular as coordenadas para plotar as categorias no mapa perceptual.
+
+Variável em linha na tabela de contingência ('perfil')
+
+Coordenadas das abcissas
+
+```{r}
+
+coord_abcissas_perfil <- sqrt(valores_singulares[1]) * (massa_colunas^-0.5) * autovetor_u[,1]
+coord_abcissas_perfil
+
+```
+Coordenadas das ordenadas
+
+```{r}
+
+coord_ordenadas_perfil <- sqrt(valores_singulares[2]) * (massa_colunas^-0.5) * autovetor_u[,2]
+coord_ordenadas_perfil
+
+```
+
+
+Variável em coluna na tabela de contingência ('aplicacao')
+
+Coordenadas das abcissas
+
+```{r}
+
+coord_abcissas_aplicacao <- sqrt(valores_singulares[1]) * (massa_linhas^-0.5) * autovetor_v[,1]
+coord_abcissas_aplicacao
+
+```
+Coordenadas das ordenadas
+
+```{r}
+
+coord_ordenadas_aplicacao <- sqrt(valores_singulares[2]) * (massa_linhas^-0.5) * autovetor_v[,2]
+coord_ordenadas_aplicacao
+
+```
+
+Por fim, o mapa perceptual
+
+```{r}
+
+cbind.data.frame(coord_abcissas_perfil, coord_ordenadas_perfil,
+                 coord_abcissas_aplicacao, coord_ordenadas_aplicacao) %>%
+  rename(dim_1_perfil = 1,
+         dim_2_perfil = 2,
+         dim_1_aplicacao = 3,
+         dim_2_aplicacao = 4) %>%
+  rownames_to_column() %>%
+  setNames(make.names(names(.), unique = TRUE)) %>%
+  mutate(aplicacao = rownames(data.frame(coord_abcissas_aplicacao,
+                                         coord_ordenadas_aplicacao))) %>%
+  rename(perfil = 1,
+         dim_1_perfil = 2,
+         dim_2_perfil = 3,
+         dim_1_aplicacao = 4,
+         dim_2_aplicacao = 5) %>%
+  ggplot() +
+  geom_point(aes(x = dim_1_perfil, y = dim_2_perfil),
+             color = "deeppink1",
+             fill = "deeppink1",
+             shape = 24,
+             size = 4) +
+  geom_text_repel(aes(x = dim_1_perfil, y = dim_2_perfil, label = perfil)) +
+  geom_point(aes(x = dim_1_aplicacao, y = dim_2_aplicacao),
+             color = "turquoise3",
+             fill = "turquoise3",
+             shape = 21,
+             size = 4) +
+  geom_text_repel(aes(x = dim_1_aplicacao, y = dim_2_aplicacao, label = aplicacao)) +
+  geom_vline(aes(xintercept = 0), linetype = "longdash", color = "grey48") +
+  geom_hline(aes(yintercept = 0), linetype = "longdash", color = "grey48") +
+  labs(x = paste("Dimensão 1:", paste0(round(variancia_explicada[1] * 100, 2),"%")),
+       y = paste("Dimensão 2:", paste0(round(variancia_explicada[2] * 100, 2),"%"))) +
+  theme_classic()
+
+```
+
+O resultado pode ser obtido por meio da função 'CA' do pacote 'FactoMineR'
+
+```{r}
+
+anacor <- CA(tabela_contingencia, graph = TRUE)
+
+```
+
+FIM
