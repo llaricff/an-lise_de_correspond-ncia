@@ -1,6 +1,6 @@
 # Análise de Correspondência
 
-## Projetos em Análise de Correspondência Simples e Múltipla , desenvolvido durante meu MBA em Data Science & Analytics, pela ESALQ/USP.
+## Projetos em Análise de Correspondência Simples e Múltipla , desenvolvidos durante meu MBA em Data Science & Analytics, pela ESALQ/USP.
 
 A análise de correspondência é uma técnica que se encaixa à análise cluster e análise fatorial, que são técnicas não-supervisionadas. São adequadas para análise de variáveis categóricas (qualitativas), cujos objetivos são:
 
